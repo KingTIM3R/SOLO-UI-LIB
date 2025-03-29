@@ -1,10 +1,9 @@
 --[[
     Notification Component
-    Solo Leveling style notification that appears in the top-middle
+    Solo Leveling style notification that appears in the top-middle of the screen
 ]]
 
-local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
+local TweenService = game:GetService("RunService") and game:GetService("TweenService")
 
 local Notification = {}
 Notification.__index = Notification
@@ -14,223 +13,307 @@ function Notification.new(options)
     
     -- Default options
     options = options or {}
-    self.Title = options.Title or "Notification"
-    self.Text = options.Text or "This is a notification"
-    self.Duration = options.Duration or 5
     self.Parent = options.Parent
     self.Theme = options.Theme
-    self.Icon = options.Icon
+    self.Title = options.Title or "Notification"
+    self.Text = options.Text or ""
+    self.Duration = options.Duration or 5 -- seconds
+    self.Type = options.Type or "Info" -- Info, Success, Warning, Error
     self.Callback = options.Callback
     
-    -- Create the notification frame
+    -- Create the notification instance
     self.Instance = Instance.new("Frame")
     self.Instance.Name = "Notification_" .. self.Title:gsub(" ", "_")
-    self.Instance.Size = UDim2.new(0, 300, 0, 80)
-    self.Instance.Position = UDim2.new(0.5, 0, 0, 0)
+    self.Instance.Size = UDim2.new(0, 0, 0, 0) -- Start small for animation
     self.Instance.AnchorPoint = Vector2.new(0.5, 0)
-    self.Instance.BackgroundColor3 = self.Theme.NotificationBackground
-    self.Instance.BackgroundTransparency = 0.1
+    self.Instance.Position = UDim2.new(0.5, 0, 0, 0)
+    self.Instance.BackgroundColor3 = self:_getBackgroundColor()
+    self.Instance.BackgroundTransparency = 0
     self.Instance.BorderSizePixel = 0
-    self.Instance.ZIndex = 10
-    self.Instance.Visible = false
+    self.Instance.ZIndex = 1000 -- High z-index to appear on top
+    self.Instance.ClipsDescendants = true
+    self.Instance.AutomaticSize = Enum.AutomaticSize.None
     
-    -- Corner radius
+    -- Add corner radius
     self.Corner = Instance.new("UICorner")
     self.Corner.CornerRadius = UDim.new(0, 6)
     self.Corner.Parent = self.Instance
     
-    -- Stroke/Border
+    -- Border/Stroke (Solo Leveling style)
     self.Stroke = Instance.new("UIStroke")
-    self.Stroke.Color = self.Theme.AccentColor
-    self.Stroke.Thickness = 2
+    self.Stroke.Color = self:_getAccentColor()
+    self.Stroke.Thickness = 1
+    self.Stroke.Transparency = 0.5
     self.Stroke.Parent = self.Instance
     
-    -- Gradient effect
-    self.Gradient = Instance.new("UIGradient")
-    self.Gradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, self.Theme.NotificationGradientStart),
-        ColorSequenceKeypoint.new(1, self.Theme.NotificationGradientEnd)
-    })
-    self.Gradient.Rotation = 45
-    self.Gradient.Parent = self.Instance
-    
-    -- Title
+    -- Title label
     self.TitleLabel = Instance.new("TextLabel")
     self.TitleLabel.Name = "Title"
-    self.TitleLabel.Text = self.Title
-    self.TitleLabel.Size = UDim2.new(1, -20, 0, 30)
+    self.TitleLabel.Size = UDim2.new(1, -50, 0, 26)
     self.TitleLabel.Position = UDim2.new(0, 10, 0, 5)
     self.TitleLabel.BackgroundTransparency = 1
+    self.TitleLabel.Text = self.Title
+    self.TitleLabel.TextColor3 = self.Theme.TitleText
     self.TitleLabel.Font = self.Theme.Font
-    self.TitleLabel.TextColor3 = self.Theme.NotificationTitle
-    self.TitleLabel.TextSize = self.Theme.TitleTextSize
+    self.TitleLabel.TextSize = 18
     self.TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    self.TitleLabel.ZIndex = 11
+    self.TitleLabel.ZIndex = 1001
     self.TitleLabel.Parent = self.Instance
     
-    -- Description
-    self.DescriptionLabel = Instance.new("TextLabel")
-    self.DescriptionLabel.Name = "Description"
-    self.DescriptionLabel.Text = self.Text
-    self.DescriptionLabel.Size = UDim2.new(1, -20, 0, 40)
-    self.DescriptionLabel.Position = UDim2.new(0, 10, 0, 35)
-    self.DescriptionLabel.BackgroundTransparency = 1
-    self.DescriptionLabel.Font = self.Theme.Font
-    self.DescriptionLabel.TextColor3 = self.Theme.NotificationText
-    self.DescriptionLabel.TextSize = self.Theme.BodyTextSize
-    self.DescriptionLabel.TextXAlignment = Enum.TextXAlignment.Left
-    self.DescriptionLabel.TextWrapped = true
-    self.DescriptionLabel.ZIndex = 11
-    self.DescriptionLabel.Parent = self.Instance
-    
-    -- Progress bar (for duration)
-    self.ProgressBar = Instance.new("Frame")
-    self.ProgressBar.Name = "ProgressBar"
-    self.ProgressBar.Size = UDim2.new(1, 0, 0, 3)
-    self.ProgressBar.Position = UDim2.new(0, 0, 1, -3)
-    self.ProgressBar.BackgroundColor3 = self.Theme.AccentColor
-    self.ProgressBar.BorderSizePixel = 0
-    self.ProgressBar.ZIndex = 12
-    self.ProgressBar.Parent = self.Instance
-    
-    -- Glow Effect
-    self.Glow = Instance.new("ImageLabel")
-    self.Glow.Name = "Glow"
-    self.Glow.BackgroundTransparency = 1
-    self.Glow.Size = UDim2.new(1, 20, 1, 20)
-    self.Glow.Position = UDim2.new(0, -10, 0, -10)
-    self.Glow.Image = "rbxassetid://5028857084" -- Circular glow
-    self.Glow.ImageColor3 = self.Theme.AccentColor
-    self.Glow.ImageTransparency = 0.8
-    self.Glow.ZIndex = 9
-    self.Glow.Parent = self.Instance
+    -- Message text
+    self.TextLabel = Instance.new("TextLabel")
+    self.TextLabel.Name = "Message"
+    self.TextLabel.Size = UDim2.new(1, -20, 0, 0)
+    self.TextLabel.Position = UDim2.new(0, 10, 0, 35)
+    self.TextLabel.BackgroundTransparency = 1
+    self.TextLabel.Text = self.Text
+    self.TextLabel.TextColor3 = self.Theme.NotificationText
+    self.TextLabel.Font = self.Theme.Font
+    self.TextLabel.TextSize = 16
+    self.TextLabel.TextWrapped = true
+    self.TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+    self.TextLabel.TextYAlignment = Enum.TextYAlignment.Top
+    self.TextLabel.ZIndex = 1001
+    self.TextLabel.AutomaticSize = Enum.AutomaticSize.Y
+    self.TextLabel.Parent = self.Instance
     
     -- Close button
     self.CloseButton = Instance.new("TextButton")
     self.CloseButton.Name = "CloseButton"
-    self.CloseButton.Text = "×"
-    self.CloseButton.Size = UDim2.new(0, 25, 0, 25)
-    self.CloseButton.Position = UDim2.new(1, -30, 0, 5)
+    self.CloseButton.Size = UDim2.new(0, 30, 0, 30)
+    self.CloseButton.Position = UDim2.new(1, -35, 0, 5)
     self.CloseButton.BackgroundTransparency = 1
-    self.CloseButton.Font = self.Theme.Font
-    self.CloseButton.TextColor3 = self.Theme.NotificationText
+    self.CloseButton.Text = "×"
+    self.CloseButton.TextColor3 = self.Theme.TitleText
+    self.CloseButton.Font = Enum.Font.GothamBold
     self.CloseButton.TextSize = 20
-    self.CloseButton.ZIndex = 12
+    self.CloseButton.ZIndex = 1002
     self.CloseButton.Parent = self.Instance
     
-    -- Add icon if provided
-    if self.Icon then
-        self.IconImage = Instance.new("ImageLabel")
-        self.IconImage.Name = "Icon"
-        self.IconImage.Size = UDim2.new(0, 24, 0, 24)
-        self.IconImage.Position = UDim2.new(0, 10, 0, 8)
-        self.IconImage.BackgroundTransparency = 1
-        self.IconImage.Image = self.Icon
-        self.IconImage.ZIndex = 12
-        self.IconImage.Parent = self.Instance
-        
-        -- Adjust title position
-        self.TitleLabel.Position = UDim2.new(0, 44, 0, 5)
-        self.TitleLabel.Size = UDim2.new(1, -54, 0, 30)
-    end
+    -- Add Solo Leveling style progress bar
+    self.ProgressBar = Instance.new("Frame")
+    self.ProgressBar.Name = "ProgressBar"
+    self.ProgressBar.Size = UDim2.new(1, 0, 0, 2)
+    self.ProgressBar.Position = UDim2.new(0, 0, 1, -2)
+    self.ProgressBar.BackgroundColor3 = self:_getAccentColor()
+    self.ProgressBar.BorderSizePixel = 0
+    self.ProgressBar.ZIndex = 1003
+    self.ProgressBar.Parent = self.Instance
+    
+    -- Add Solo Leveling glow effect
+    self.Glow = Instance.new("ImageLabel")
+    self.Glow.Name = "Glow"
+    self.Glow.BackgroundTransparency = 1
+    self.Glow.Size = UDim2.new(0, 40, 0, 40)
+    self.Glow.Position = UDim2.new(0, -15, 0, -15)
+    self.Glow.Image = "rbxassetid://5028857084" -- Circular glow
+    self.Glow.ImageColor3 = self:_getAccentColor()
+    self.Glow.ImageTransparency = 0.7
+    self.Glow.ZIndex = 999
+    self.Glow.Parent = self.Instance
     
     -- Connect events
-    self:_connectEvents()
+    self.CloseButton.MouseButton1Click:Connect(function()
+        self:Close()
+    end)
+    
+    self.CloseButton.MouseEnter:Connect(function()
+        self.CloseButton.TextColor3 = self:_getAccentColor()
+    end)
+    
+    self.CloseButton.MouseLeave:Connect(function()
+        self.CloseButton.TextColor3 = self.Theme.TitleText
+    end)
+    
+    -- Setup auto close
+    self:_setupAutoClose()
+    
+    -- Calculate size
+    local textHeight = math.max(60, self.TextLabel.TextBounds.Y + 50) -- Minimum 60px height
+    local width = math.min(500, math.max(300, self.TextLabel.TextBounds.X + 60)) -- Min 300px, max 500px width
+    
+    -- Animate in
+    self.TargetSize = UDim2.new(0, width, 0, textHeight)
     
     -- Set parent
     if self.Parent then
         self.Instance.Parent = self.Parent
-        self:Show()
     end
+    
+    -- Animate in
+    self:_animateIn()
     
     return self
 end
 
-function Notification:_connectEvents()
-    -- Close button
-    self.CloseButton.MouseButton1Click:Connect(function()
-        self:Hide()
-    end)
-    
-    -- Callback on click
-    if self.Callback then
-        self.Instance.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                self.Callback()
-            end
-        end)
+function Notification:_getBackgroundColor()
+    -- Get background color based on notification type
+    if self.Type == "Success" then
+        return self.Theme.SuccessBackground or Color3.fromRGB(40, 60, 40)
+    elseif self.Type == "Warning" then
+        return self.Theme.WarningBackground or Color3.fromRGB(60, 55, 30)
+    elseif self.Type == "Error" then
+        return self.Theme.ErrorBackground or Color3.fromRGB(60, 35, 35)
+    else
+        -- Info or default
+        return self.Theme.NotificationBackground or self.Theme.WindowBackground
     end
 end
 
-function Notification:Show()
-    -- Set visibility
-    self.Instance.Visible = true
+function Notification:_getAccentColor()
+    -- Get accent color based on notification type
+    if self.Type == "Success" then
+        return self.Theme.SuccessAccent or Color3.fromRGB(75, 200, 75)
+    elseif self.Type == "Warning" then
+        return self.Theme.WarningAccent or Color3.fromRGB(250, 200, 0)
+    elseif self.Type == "Error" then
+        return self.Theme.ErrorAccent or Color3.fromRGB(255, 75, 75)
+    else
+        -- Info or default
+        return self.Theme.AccentColor
+    end
+end
+
+function Notification:_animateIn()
+    -- Initial state
+    self.Instance.Size = UDim2.new(0, 0, 0, 0)
+    self.Instance.Position = UDim2.new(0.5, 0, 0, 0)
+    self.Instance.BackgroundTransparency = 1
+    self.Stroke.Transparency = 1
     
-    -- Initial position (offscreen)
-    self.Instance.Position = UDim2.new(0.5, 0, 0, -self.Instance.AbsoluteSize.Y)
+    -- Create Solo Leveling "System Call" particles
+    self:_createSystemCallEffect()
     
-    -- Animate in
-    local appearTween = TweenService:Create(self.Instance, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0.5, 0, 0, 0)
-    })
-    appearTween:Play()
-    
-    -- Add blue glow effect when appearing
-    local glowTween = TweenService:Create(self.Glow, TweenInfo.new(0.5), {
-        ImageTransparency = 0.6
-    })
-    glowTween:Play()
-    
-    -- Progress bar animation
-    local progressTween = TweenService:Create(self.ProgressBar, TweenInfo.new(self.Duration, Enum.EasingStyle.Linear), {
-        Size = UDim2.new(0, 0, 0, 3)
-    })
-    progressTween:Play()
-    
-    -- Hide after duration
+    -- Animate to target size
+    if TweenService then
+        local sizeTween = TweenService:Create(self.Instance, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = self.TargetSize,
+            BackgroundTransparency = 0,
+            Position = UDim2.new(0.5, 0, 0, 5) -- Slightly offset from top
+        })
+        
+        local strokeTween = TweenService:Create(self.Stroke, TweenInfo.new(0.5), {
+            Transparency = 0.5
+        })
+        
+        sizeTween:Play()
+        strokeTween:Play()
+    else
+        -- Fallback if TweenService not available
+        self.Instance.Size = self.TargetSize
+        self.Instance.BackgroundTransparency = 0
+        self.Instance.Position = UDim2.new(0.5, 0, 0, 5)
+        self.Stroke.Transparency = 0.5
+    end
+end
+
+function Notification:_createSystemCallEffect()
+    -- Create Solo Leveling style particles (blue particles rising from bottom)
     spawn(function()
-        wait(self.Duration)
-        -- Only hide if not already hidden
-        if self.Instance.Visible then
-            self:Hide()
+        for i = 1, 10 do -- Create 10 particles
+            if not self.Instance or not self.Instance.Parent then return end
+            
+            local particle = Instance.new("Frame")
+            particle.Name = "SystemCallParticle"
+            particle.Size = UDim2.new(0, 3, 0, 3)
+            particle.BorderSizePixel = 0
+            particle.BackgroundColor3 = self:_getAccentColor()
+            particle.BackgroundTransparency = 0.3
+            particle.Position = UDim2.new(math.random(), 0, 1, 10) -- Start below
+            
+            -- Add corner radius
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(1, 0) -- Make it circular
+            corner.Parent = particle
+            
+            particle.Parent = self.Instance
+            
+            -- Animate particle rising up
+            spawn(function()
+                if TweenService then
+                    TweenService:Create(particle, TweenInfo.new(1), {
+                        Position = UDim2.new(particle.Position.X.Scale, 0, 0, -10),
+                        BackgroundTransparency = 1
+                    }):Play()
+                else
+                    -- Simple animation if TweenService not available
+                    for j = 1, 10 do
+                        particle.Position = UDim2.new(
+                            particle.Position.X.Scale,
+                            0,
+                            1 - (j / 10),
+                            10 - 20 * (j / 10)
+                        )
+                        particle.BackgroundTransparency = 0.3 + (j / 10) * 0.7
+                        wait(0.05)
+                    end
+                end
+                
+                wait(1)
+                if particle and particle.Parent then
+                    particle:Destroy()
+                end
+            end)
+            
+            wait(0.07) -- Stagger particle creation
         end
     end)
 end
 
-function Notification:Hide()
-    if not self.Instance or not self.Instance.Parent then return end
-    
-    -- Animate out
-    local disappearTween = TweenService:Create(self.Instance, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-        Position = UDim2.new(1.5, 0, 0, 0),
-        BackgroundTransparency = 1
-    })
-    
-    disappearTween.Completed:Connect(function()
-        self:Destroy()
+function Notification:_setupAutoClose()
+    spawn(function()
+        if TweenService then
+            -- Create progress bar tween (Solo Leveling style)
+            TweenService:Create(self.ProgressBar, TweenInfo.new(self.Duration), {
+                Size = UDim2.new(0, 0, 0, 2) -- Shrink to zero width
+            }):Play()
+        else
+            -- Fallback if TweenService not available
+            for i = 1, 10 do
+                if not self.ProgressBar or not self.ProgressBar.Parent then return end
+                wait(self.Duration / 10)
+                self.ProgressBar.Size = UDim2.new(1 - (i / 10), 0, 0, 2)
+            end
+        end
+        
+        wait(self.Duration)
+        if self.Instance and self.Instance.Parent then
+            self:Close()
+        end
     end)
-    
-    disappearTween:Play()
 end
 
-function Notification:SetTheme(theme)
-    self.Theme = theme
+function Notification:Close()
+    -- Don't close if already closing
+    if self.IsClosing then return end
+    self.IsClosing = true
     
-    self.Instance.BackgroundColor3 = theme.NotificationBackground
-    self.TitleLabel.Font = theme.Font
-    self.TitleLabel.TextColor3 = theme.NotificationTitle
-    self.TitleLabel.TextSize = theme.TitleTextSize
-    self.DescriptionLabel.Font = theme.Font
-    self.DescriptionLabel.TextColor3 = theme.NotificationText
-    self.DescriptionLabel.TextSize = theme.BodyTextSize
-    self.ProgressBar.BackgroundColor3 = theme.AccentColor
-    self.Glow.ImageColor3 = theme.AccentColor
-    self.Stroke.Color = theme.AccentColor
+    -- Animate out
+    if TweenService then
+        local sizeTween = TweenService:Create(self.Instance, TweenInfo.new(0.3), {
+            Size = UDim2.new(0, self.Instance.Size.X.Offset, 0, 0),
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0.5, 0, 0, 0)
+        })
+        
+        sizeTween.Completed:Connect(function()
+            self:Destroy()
+        end)
+        
+        sizeTween:Play()
+    else
+        -- Fallback if TweenService not available
+        self.Instance.Size = UDim2.new(0, self.Instance.Size.X.Offset, 0, 0)
+        self.Instance.BackgroundTransparency = 1
+        self.Instance.Position = UDim2.new(0.5, 0, 0, 0)
+        wait(0.3)
+        self:Destroy()
+    end
     
-    self.Gradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, theme.NotificationGradientStart),
-        ColorSequenceKeypoint.new(1, theme.NotificationGradientEnd)
-    })
+    -- Fire callback
+    if self.Callback then
+        self.Callback()
+    end
 end
 
 function Notification:Destroy()
@@ -238,7 +321,21 @@ function Notification:Destroy()
         self.Instance:Destroy()
         self.Instance = nil
     end
+    
     setmetatable(self, nil)
+end
+
+function Notification:SetTheme(theme)
+    self.Theme = theme
+    
+    self.Instance.BackgroundColor3 = self:_getBackgroundColor()
+    self.TitleLabel.TextColor3 = theme.TitleText
+    self.TitleLabel.Font = theme.Font
+    self.TextLabel.TextColor3 = theme.NotificationText
+    self.TextLabel.Font = theme.Font
+    self.Stroke.Color = self:_getAccentColor()
+    self.ProgressBar.BackgroundColor3 = self:_getAccentColor()
+    self.Glow.ImageColor3 = self:_getAccentColor()
 end
 
 return Notification
